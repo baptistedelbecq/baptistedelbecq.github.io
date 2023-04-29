@@ -1,13 +1,173 @@
-<t name="Homepage" t-name="website.homepage">
-    <t t-call="website.layout">
-        <t t-set="pageName" t-value="'homepage'"/>
-        <div id="wrap" class="oe_structure oe_empty"><section class="s_cover parallax pt96 pb96 s_parallax_no_overflow_hidden o_full_screen_height o_colored_level o_we_force_no_transition" data-scroll-background-ratio="1" data-oe-shape-data="{&quot;shape&quot;:&quot;web_editor/Origins/18&quot;,&quot;colors&quot;:{&quot;c1&quot;:&quot;rgba(0, 0, 0, 0.15)&quot;},&quot;flip&quot;:[&quot;x&quot;]}" data-snippet="s_cover" data-name="Couverture" style="">
-        <span class="s_parallax_bg oe_img_bg o_bg_img_center o_we_force_no_transition" style="background-image: url(&quot;/web/image/406-93eb4a6a/1668294069092.jpg&quot;); background-position: 50% 80%;" data-original-id="395" data-original-src="/web/image/395-36f82150/1668294069092.jpg" data-mimetype="image/jpeg" data-resize-width="1884"/><div class="o_we_shape o_web_editor_Origins_18 o_we_force_no_transition" style="background-image: url(&quot;/web_editor/shape/web_editor%2FOrigins%2F18.svg?c1=rgba(0%2C%200%2C%200%2C%200.15)&amp;flip=x&quot;); background-position: 50% 50%;"/>
-        
-        
-        <div class="s_allow_columns container">
-            <h1 style="text-align: center;">- BAPTISTE&amp;nbsp;DELBECQ -</h1><p style="text-align: center;"><span style="font-size: 18px;">A S T R O P H O T O G R A P H I E&amp;nbsp; &amp;amp;&amp;nbsp; P H O T O G R A P H I E</span></p>
+<data name="Main layout" inherit_id="portal.frontend_layout">
+    <xpath expr="//html" position="before">
+        <t t-set="html_data" t-value="{             'lang': lang and lang.replace('_', '-'),             'data-website-id': website.id if website else None,             'data-edit_translations': '1' if edit_translations else None,             'data-main-object': repr(main_object) if main_object else None,             'data-seo-object': repr(seo_object) if seo_object else None,         }"/>
+        <t t-if="not request.env.user._is_public()" t-set="nothing" t-value="html_data.update({             'data-is-published': 'website_published' in main_object.fields_get() and main_object.website_published,             'data-can-publish': 'can_publish' in main_object.fields_get() and main_object.can_publish,             'data-editable-in-backend': edit_in_backend or ('website_published' in main_object.fields_get() and main_object._name != 'website.page'),         })"/>
+        <t t-if="editable or translatable" t-set="nothing" t-value="html_data.update({             'data-editable': '1' if editable else None,             'data-translatable': '1' if translatable else None,             'data-view-xmlid': xmlid,             'data-viewid': viewid,         })"/>
+    </xpath>
+
+    <xpath expr="//head" position="attributes">
+        <!--
+        Cache the <head> of the website.layout:
+        - For each individual website.page record (their css/js might be the
+          same but their title will not for example). Arguably we could do this
+          for any record (not only website.page) but this t-cache was originally
+          added to replace the website.page own cache system. For other records,
+          it could probably depend on each individual access right.
+        - Only for non-designers (especially visitors) (hence the "editable or
+          translatable" check).
+        - Only if not in any debug mode (we want any correct value of debug mode
+          to correctly appear in the `odoo` object + assets may depend on this
+          (e.g. debug=assets or debug=tests)).
+        -->
+        <attribute name="t-cache">main_object if main_object and main_object._name == 'website.page' and not request.session.debug and not editable and not translatable else None</attribute>
+    </xpath>
+    <xpath expr="//head/*[1]" position="before">
+        <t t-if="not title">
+            <t t-if="not additional_title and main_object and 'name' in main_object">
+                <t t-set="additional_title" t-value="main_object.name"/>
+            </t>
+            <t t-set="default_title" t-translation="off"> <t t-if="additional_title"><t t-out="additional_title"/> | </t><t t-out="(website or res_company).name"/> </t>
+            <t t-set="seo_object" t-value="seo_object or main_object"/>
+            <t t-if="seo_object and 'website_meta_title' in seo_object and seo_object.website_meta_title">
+                <t t-set="title" t-value="seo_object.website_meta_title"/>
+            </t>
+            <t t-else="">
+                <t t-set="title" t-value="default_title"/>
+            </t>
+        </t>
+        <t t-set="x_icon" t-value="website.image_url(website, 'favicon')"/>
+    </xpath>
+    <xpath expr="//head/meta[last()]" position="after">
+        <meta name="generator" content="Odoo"/>
+        <t t-set="website_meta" t-value="seo_object and seo_object.get_website_meta() or {}"/>
+        <meta name="default_title" t-att-content="default_title" groups="website.group_website_designer"/>
+        <meta t-if="(main_object and 'website_indexed' in main_object         and not main_object.website_indexed) or (website.domain and website.domain not in request.httprequest.url_root)" name="robots" content="noindex"/>
+        <t t-set="seo_object" t-value="seo_object or main_object"/>
+        <t t-set="meta_description" t-value="seo_object and 'website_meta_description' in seo_object             and seo_object.website_meta_description or website_meta_description or website_meta.get('meta_description', '')"/>
+        <t t-set="meta_keywords" t-value="seo_object and 'website_meta_keywords' in seo_object             and seo_object.website_meta_keywords or website_meta_keywords"/>
+        <meta t-if="meta_description or editable" name="description" t-att-content="meta_description"/>
+        <meta t-if="meta_keywords or editable" name="keywords" t-att-content="meta_keywords"/>
+        <t t-if="seo_object">
+        <meta name="default_description" t-att-content="website_meta_description or website_meta.get('meta_description')" groups="website.group_website_designer"/>
+            <!-- OpenGraph tags for Facebook sharing -->
+            <t t-set="opengraph_meta" t-value="website_meta.get('opengraph_meta')"/>
+            <t t-if="opengraph_meta">
+                <t t-foreach="opengraph_meta" t-as="property">
+                    <t t-if="isinstance(opengraph_meta[property], list)">
+                        <t t-foreach="opengraph_meta[property]" t-as="meta_content">
+        <meta t-att-property="property" t-att-content="meta_content"/>
+                        </t>
+                    </t>
+                    <t t-else="">
+        <meta t-att-property="property" t-att-content="opengraph_meta[property]"/>
+                    </t>
+                </t>
+            </t>
+            <!-- Twitter tags for sharing -->
+            <t t-set="twitter_meta" t-value="website_meta.get('twitter_meta')"/>
+            <t t-if="opengraph_meta">
+                <t t-foreach="twitter_meta" t-as="t_meta">
+        <meta t-att-name="t_meta" t-att-content="twitter_meta[t_meta]"/>
+                </t>
+            </t>
+        </t>
+        <!-- `alternate`/`canonical` mainly useful to crawlers/bots/SEO tools, which test the website as public user -->
+        <t t-if="request and request.is_frontend_multilang and website and website.is_public_user()">
+            <t t-set="alternate_languages" t-value="website._get_alternate_languages(canonical_params=canonical_params)"/>
+            <t t-foreach="alternate_languages" t-as="lg">
+        <link rel="alternate" t-att-hreflang="lg['hreflang']" t-att-href="lg['href']"/>
+            </t>
+        </t>
+        <link t-if="request and website and website.is_public_user()" rel="canonical" t-att-href="website._get_canonical_url(canonical_params=canonical_params)"/>
+        <!-- TODO: Once we have style in DB, add this preconnect only if a
+        google font is actually used. Note that if no font is used, the
+        preconnect is actually not connecting to the google servers. -->
+        <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin=""/>
+    </xpath>
+
+    <xpath expr="//header" position="attributes">
+        <attribute name="data-name">Header</attribute>
+    </xpath>
+
+    <xpath expr="//header/t[@t-cache]" position="attributes">
+        <attribute name="t-cache">xmlid,website</attribute>
+    </xpath>
+
+    <xpath expr="//header" position="before">
+        <t t-set="cta_btn_text" t-value="False"/>
+        <t t-set="cta_btn_href">/contactus</t>
+    </xpath>
+
+    <xpath expr="//footer" position="attributes">
+        <attribute name="data-name">Footer</attribute>
+        <!-- Background now controlled by css configuration, using color combinations -->
+        <attribute name="t-attf-class" add="o_colored_level o_cc" remove="bg-light" separator=" "/>
+        <!-- Add the main object as a cache key so that the footer_visible page
+        option is properly reflected across pages. Controllers and other objects
+        do not have any page option (yet) so they can share the same cache -->
+        <attribute name="t-cache" add="website,main_object._name == 'website.page' and main_object"/>
+    </xpath>
+    <xpath expr="//div[hasclass('o_footer_copyright')]" position="attributes">
+        <attribute name="data-name">Copyright</attribute>
+        <!-- Background now controlled by css configuration, using color combinations -->
+        <attribute name="class" add="o_colored_level o_cc" separator=" "/>
+    </xpath>
+    <xpath expr="//t[@t-call='web.brand_promotion']/.." position="attributes">
+        <attribute name="class" add="o_not_editable" separator=" "/>
+        <attribute name="t-if">not editable</attribute>
+    </xpath>
+
+    <xpath expr="//div[@id='wrapwrap']" position="after">
+        <t t-if="website and website.google_analytics_key and request.env['ir.http']._is_allowed_cookie('optional') and not editable">
+            <script id="tracking_code" async="1" t-attf-src="https://www.googletagmanager.com/gtag/js?id={{ website.google_analytics_key }}"/>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '<t t-esc="website.google_analytics_key"/>');
+            </script>
+        </t>
+        <t t-if="website and website.plausible_shared_key and not editable">
+            <script id="plausible_script" name="plausible" defer="defer" t-att-data-domain="website.plausible_site" t-att-src="website._get_plausible_script_url()"/>
+        </t>
+    </xpath>
+
+    <!-- Page options -->
+    <xpath expr="//div[@id='wrapwrap']" position="before">
+        <t groups="website.group_website_restricted_editor">
+            <t t-foreach="['header_overlay', 'header_color', 'header_visible', 'footer_visible']" t-as="optionName">
+                <!-- Firefox autocomplete is too aggressive and works on hidden inputs,
+                so we need to disable it (https://bugzilla.mozilla.org/show_bug.cgi?id=520561) -->
+                <input t-if="optionName in main_object" type="hidden" class="o_page_option_data" autocomplete="off" t-att-name="optionName" t-att-value="main_object[optionName]"/>
+            </t>
+        </t>
+        <div groups="base.group_user" class="o_frontend_to_backend_nav position-fixed d-none">
+            <svg xmlns="http://www.w3.org/2000/svg" class="o_frontend_to_backend_icon position-absolute" width="24px" height="24px" viewBox="-7 -7 24 24" preserveAspectRatio="xMinYMin">
+                <path fill="#FFF" d="M8 8V1a1 1 0 1 1 2 0v8a1 1 0 0 1-1 1H1a1 1 0 1 1 0-2h7z"/>
+            </svg>
+            <div class="o_frontend_to_backend_buttons d-flex">
+                <a href="#" title="Go to your Odoo Apps" class="o_frontend_to_backend_apps_btn fa fa-th d-flex align-items-center justify-content-center text-decoration-none" data-bs-toggle="dropdown"/>
+                <div class="dropdown-menu o_frontend_to_backend_apps_menu" role="menu">
+                    <a role="menuitem" class="dropdown-item" t-esc="menu['name']" t-as="menu" t-foreach="env['ir.ui.menu'].load_menus_root()['children']" t-attf-href="/web#menu_id=#{menu['id']}&amp;action=#{menu['action'] and menu['action'].split(',')[1] or ''}"/>
+                </div>
+                <a groups="website.group_website_restricted_editor" href="#" title="Edit this content" class="o_frontend_to_backend_edit_btn px-3 d-flex align-items-center justify-content-center text-decoration-none">
+                    <img src="/website/static/description/icon.png"/>Editor
+                </a>
+            </div>
         </div>
-    </section></div>
-    </t>
-</t>
+    </xpath>
+    <xpath expr="//div[@id='wrapwrap']" position="attributes">
+        <attribute name="t-attf-class" add="#{'o_header_overlay' if 'header_overlay' in main_object and main_object.header_overlay else ''}" separator=" "/>
+    </xpath>
+    <xpath expr="//header" position="attributes">
+        <attribute name="t-attf-class" add="#{main_object.header_color if 'header_color' in main_object else ''}" separator=" "/>
+    </xpath>
+    <xpath expr="//header" position="attributes">
+        <attribute name="t-attf-class" add="#{'d-none o_snippet_invisible' if 'header_visible' in main_object and not main_object.header_visible else ''}" separator=" "/>
+        <attribute name="t-att-data-invisible">'1' if 'header_visible' in main_object and not main_object.header_visible else None</attribute>
+    </xpath>
+    <xpath expr="//footer[@id='bottom']" position="attributes">
+        <attribute name="t-attf-class" add="#{'d-none o_snippet_invisible' if 'footer_visible' in main_object and not main_object.footer_visible else ''}" separator=" "/>
+        <attribute name="t-att-data-invisible">'1' if 'footer_visible' in main_object and not main_object.footer_visible else None</attribute>
+    </xpath>
+</data>
